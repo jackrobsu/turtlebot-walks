@@ -110,7 +110,7 @@ class Agent(object):
         # print(self.transitions)
         self.policy = self.getPolicy()
         if self.followProb > 0.3 :
-            self.followProb self.followProb * 0.95
+            self.followProb = self.followProb * 0.95
 
     def executeAction(self,state):
         r = self.world.simulation(state,self.policy[state])
