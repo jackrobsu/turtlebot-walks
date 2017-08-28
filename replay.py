@@ -1,4 +1,4 @@
-#-×- coding:utf-8 -*-
+#-*- coding:utf-8 -*-
 import roslib
 import rospy
 from geometry_msgs.msg import Pose
@@ -30,7 +30,7 @@ def main():
 #定时作用，即一定时间后发送超时消息
 def timesleep(data):
     global timePub
-    rospy.sleep(80)
+    rospy.sleep(60)
     timePub.publish(String("0"))
 
 #重新启动定时

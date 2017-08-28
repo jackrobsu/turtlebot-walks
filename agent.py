@@ -2,6 +2,7 @@
 
 import numpy as np
 import random as rand
+import time
 from MDPy import *
 from world import *
 
@@ -32,18 +33,22 @@ class Agent(object):
         print("states ",self.states)
         self.actions = len(self.world.actionmap)
         self.policy = None
-        self.rmax = 1000.0
+        self.rmax = 10.0
         self.state0 = self.states
         self.init()
         self.followProb = 1.0
         self.stop = False
 
-    def init(self):
+    def initSample(self):
+        self.samples = []
         for i in range(self.states):
             self.samples.append([])
             self.samples[i] = []
             for j in range(self.actions) :
                 self.samples[i].append([])
+
+    def init(self):
+        self.initSample()
         # print(self.samples)
         for i in range(self.states):
             self.transitions.append([])
@@ -67,9 +72,10 @@ class Agent(object):
             for j in range(self.actions):
                 for transition in self.transitions[i][j] :
                     mdp.add_transition(i,j,transition[0:3])
-        mdp.value_iteration(0.9)
+        mdp.value_iteration(0.5)
         return mdp.policy
-    
+
+    # 通过samples更新策略
     def update(self):
         for i in range(self.states):
             sum = 0.0
@@ -95,9 +101,9 @@ class Agent(object):
                     flag = False
                     for index in range(len(self.transitions[i][j])) :
                         if s == self.transitions[i][j][index][0] :
-                            self.transitions[i][j][index][1] = ( self.transitions[i][j][index][1] * self.transitions[i][j][index][3] + states[s][0] ) / ( self.transitions[i][j][index][3] + states[s][1] )
+                            self.transitions[i][j][index][1] = float( self.transitions[i][j][index][1] * self.transitions[i][j][index][3] + states[s][0] ) / float( self.transitions[i][j][index][3] + states[s][1] )
                             self.transitions[i][j][index][3] += states[s][1] 
-                            self.transitions[i][j][index][2] = states[s][1] / sum
+                            self.transitions[i][j][index][2] = float(states[s][1]) / float(sum)
                             flag = True
                             break
                     if flag == False :
@@ -107,21 +113,29 @@ class Agent(object):
                 # print(i,j)
                 # print(self.transitions[i][j])
                 # exit(0)
+        print(self.state0,self.states)
+        for i in range(self.states):
+            for j in range(self.actions):
+                for transition in self.transitions[i][j] :
+                    if transition[0] != self.state0 :
+                        print(transition)
         # print(self.transitions)
         self.policy = self.getPolicy()
         if self.followProb > 0.3 :
-            self.followProb = self.followProb * 0.95
+            self.followProb = self.followProb * 0.99
 
     def executeAction(self,state):
         r = self.world.simulation(state,self.policy[state])
         self.samples[r[0]][r[1]].append(r[2:4])
         return r[2:5]
 
+    # 向世界发送动作消息
     def doAction(self,state,action=None,reward=None):
         if action == None :
             return self.world.doSimulation(self.policy[state])
         else:
             p = rand.random()
+            #如果上一步动作执行完获得了不错的reward，那么一定概率再次选择与上次一致的动作进行探索（目前只适用于导航）
             if p < self.followProb :
                 isSame = False
                 
@@ -170,7 +184,7 @@ class Agent(object):
     def printPolicy(self):
         for p in self.policy:
             cell = self.world.getCellFromStateNum(p)
-            if cell.X >=12 and cell.X <= 16 and cell.Y >= 12 and cell.Y <= 16 :
+            if cell.X >=4 and cell.X <= 16 and cell.Y >= 4 and cell.Y <= 16 :
                 print( " ( %d , %d ) , %d %s " % ( cell.X,cell.Y,self.policy[p],self.world.actionmap[self.policy[p]] ) ) 
 
     def checkSamples(self):
@@ -180,22 +194,25 @@ class Agent(object):
 agent = None
 mapspace = Map()
 
+#接收地图数据
 def getMap(data):
     global mapspace
     data = data.data
     mapspace.setMap(data)
     
-    
+#接收地图规格数据
 def getMapMetaData(data):
     global mapspace
     mapspace.setMapParameters(data)
     # mapspace.Print()
 
+#实时获得机器人当前位置
 def getPosition(data):
     # print(data)
     global mapspace
     mapspace.setPosition(data.pose.pose.position)
 
+#超时消息处理
 def TimeOut(data):
     global agent
     agent.Timeout()
@@ -227,13 +244,15 @@ if __name__ == '__main__' :
     agent = Agent(mapspace)
     agent.setTarget()
     # agent.getPolicy()
-    state = agent.getInitPosition()
+    state = agent.getInitPosition()     
     print("state ",state)
     # print(agent.policy)
     agent.printPolicy()
     Start.publish(String("Start"))
     successtimes = 0
     times = 0
+
+    #循环执行机器人的动作
     for _ in range(1000):
         action = None
         reward = 0.0
@@ -251,7 +270,7 @@ if __name__ == '__main__' :
                     print("timeout")
                     times += 1
                     for r in path :
-                        r[3] -= 10
+                        # r[3] -= 5
                         print("sample ",r)
                         agent.samples[r[0]][r[1]].append(r[2:4])
                     cell = agent.world.getCellFromStateNum(agent.world.Target)
@@ -292,9 +311,9 @@ if __name__ == '__main__' :
         agent.update()
         print("update")
         agent.printPolicy()
-
+        agent.initSample()
         Stop.publish(String("Stop"))
-        rospy.sleep(3)
+        time.sleep(5)
         agent.getInitPosition()
         Start.publish(String("Start"))
     print('policy ',agent.policy)

@@ -173,62 +173,62 @@ class World(object):
     #同时接收返回的数据，包括reward、当前位置等，然后通过一定的reward机制评定最后的reward，最后返回给机器人
     def doSimulation(self,action):
         x , y = self.doAction(action)
+        print("action ",self.actionmap[action])
         state = self.Map.sendGoal(x,y)
         if state != None :
             state.Print()
         # time.sleep(1)
         state1 = self.getStateNum(state.curCell)
-        state2 = self.getStateNum(state.NextCell)
+        state2 = self.getStateNum(state.realCell)
         realstate = self.getStateNum(state.realCell)
 
         targetCell = self.getCellFromStateNum(self.Target)
         
         diff1 = math.fabs(targetCell.X-state.curCell.X) + math.fabs(targetCell.Y-state.curCell.Y) 
-        diff2 = math.fabs(targetCell.X-state.NextCell.X) + math.fabs(targetCell.Y-state.NextCell.Y)
+        diff2 = math.fabs(targetCell.X-state.realCell.X) + math.fabs(targetCell.Y-state.realCell.Y)
 
         addreward = 0
         extraReward = 0.0
         if diff2 >= diff1 :
-            extraReward += 50
+            extraReward += 10
 
         #原地不懂，惩罚，表明可能遇到了障碍物
-        if state1 == state2 :
+        if state1 == realstate :
             extraReward += 10
         
         #离目标越近，reward越高
-        if math.fabs( targetCell.X - state.curCell.X ) > math.fabs(targetCell.X - state.NextCell.X) :
+        if math.fabs( targetCell.X - state.curCell.X ) > math.fabs(targetCell.X - state.realCell.X) :
             addreward += 20
 
-            if math.fabs(targetCell.X - state.NextCell.X) <= 10 :
-                addreward += 5
-            elif math.fabs(targetCell.X - state.NextCell.X) <= 8 :
-                addreward += 5
-            elif math.fabs(targetCell.X - state.NextCell.X) <= 6 :
-                addreward += 7
-            elif math.fabs(targetCell.X - state.NextCell.X) <= 4 :
-                addreward += 9
-            elif math.fabs(targetCell.X - state.NextCell.X) <= 2 :
+            if math.fabs(targetCell.X - state.realCell.X) <= 2 :
                 addreward += 11
+                self.changeRewardOnPath(40)
+            elif math.fabs(targetCell.X - state.realCell.X) <= 3 :
+                addreward += 9
+                self.changeRewardOnPath(30)                
+            elif math.fabs(targetCell.X - state.realCell.X) <= 4 :
+                addreward += 7
+                self.changeRewardOnPath(20)
+                
+            elif math.fabs(targetCell.X - state.realCell.X) <= 5 :
+                addreward += 5
+                self.changeRewardOnPath(15)
+                
+            elif math.fabs(targetCell.X - state.realCell.X) <= 6 :
+                addreward += 5
+                self.changeRewardOnPath(10)
         
-        if math.fabs( targetCell.X - state.curCell.X ) < math.fabs(targetCell.X - state.NextCell.X) :
-            addreward -= 20
+        if math.fabs( targetCell.X - state.curCell.X ) < math.fabs(targetCell.X - state.realCell.X) :
+            addreward -= 50
 
-        if math.fabs( targetCell.Y - state.curCell.Y ) > math.fabs(targetCell.Y - state.NextCell.Y) :
+        if math.fabs( targetCell.Y - state.curCell.Y ) > math.fabs(targetCell.Y - state.realCell.Y) :
             addreward += 20
 
-            if math.fabs(targetCell.Y - state.NextCell.Y) <= 10 :
+            if math.fabs(targetCell.Y - state.realCell.Y) <= 1 :
                 addreward += 5
-            elif math.fabs(targetCell.Y - state.NextCell.Y) <= 8 :
-                addreward += 5
-            elif math.fabs(targetCell.Y - state.NextCell.Y) <= 6 :
-                addreward += 7
-            elif math.fabs(targetCell.Y - state.NextCell.Y) <= 4 :
-                addreward += 9
-            elif math.fabs(targetCell.Y - state.NextCell.Y) <= 2 :
-                addreward += 11
             
-        if math.fabs( targetCell.Y - state.curCell.Y ) < math.fabs(targetCell.Y - state.NextCell.Y) :
-            addreward -20
+        if math.fabs( targetCell.Y - state.curCell.Y ) < math.fabs(targetCell.Y - state.realCell.Y) :
+            addreward -40
             
         
             
@@ -238,13 +238,27 @@ class World(object):
         self.path.append([state1,action,state2,state.reward,state.c])
         flag = self.checkGoal(state2)
         if flag :
-            for i in range(self.path):
+            for i in range(len(self.path)):
                 self.path[i][3] += 10
 
         if flag :
             return realstate , False , self.path , state.reward , action
         else:
             return realstate , True , self.path , state.reward , action
+
+    def changeRewardOnPath(self,reward,rate=0.5,axis=0):
+        for i in range(len(self.path)-1,-1,-1):
+            cell1 = self.getCellFromStateNum(self.path[i][0])
+            cell2 = self.getCellFromStateNum(self.path[i][2])
+            targetCell = self.getCellFromStateNum(self.Target)
+            if math.fabs( targetCell.X - cell1.X ) > math.fabs(targetCell.X - cell2.X) :     
+                self.path[i][3] += reward
+
+            if reward > 5 :
+                reward = reward * rate
+            else:
+                reward = 5
+            
         
     def checkGoal(self,state):
         if state == self.Target :
